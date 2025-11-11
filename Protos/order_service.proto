@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+option csharp_namespace = "ECommerceGRPC.OrderService";
+
+package orderservice;
+
+// Servicio de gestión de pedidos
+service OrderService {
+  // Obtener un pedido por ID (Unary)
+  rpc GetOrder (GetOrderRequest) returns (OrderResponse);
+  
+  // Obtener lista de pedidos con paginación (Server Streaming)
+  rpc GetOrders (GetOrdersRequest) returns (stream OrderResponse);
+  
+  // Obtener pedidos de un usuario específico (Server Streaming)
+  rpc GetOrdersByUser (GetOrdersByUserRequest) returns (stream OrderResponse);
+  
+  // Crear un nuevo pedido (Unary)
+  rpc CreateOrder (CreateOrderRequest) returns (OrderResponse);
+  
+  // Actualizar estado de un pedido (Unary)
+  rpc UpdateOrderStatus (UpdateOrderStatusRequest) returns (OrderResponse);
+  
+  // Cancelar un pedido (Unary)
+  rpc CancelOrder (CancelOrderRequest) returns (OrderResponse);
+  
+  // Validar disponibilidad de productos antes de crear pedido (Unary)
+  rpc ValidateOrderItems (ValidateOrderItemsRequest) returns (ValidateOrderItemsResponse);
+}
+
+// Mensajes de Request
+
+message GetOrderRequest {
+  int32 id = 1;
+}
+
+message GetOrdersRequest {
+  int32 page_number = 1;
+  int32 page_size = 2;
+  string status = 3; // Opcional: Pending, Processing, Completed, Cancelled
+}
+
+message GetOrdersByUserRequest {
+  int32 user_id = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+}
+
+message CreateOrderRequest {
+  int32 user_id = 1;
+  string shipping_address = 2;
+  repeated OrderItemRequest items = 3;
+}
+
+message OrderItemRequest {
+  int32 product_id = 1;
+  int32 quantity = 2;
+}
+
+message UpdateOrderStatusRequest {
+  int32 id = 1;
+  string status = 2; // Pending, Processing, Completed, Cancelled
+}
+
+message CancelOrderRequest {
+  int32 id = 1;
+  string reason = 2;
+}
+
+message ValidateOrderItemsRequest {
+  repeated OrderItemRequest items = 1;
+}
+
+// Mensajes de Response
+
+message OrderResponse {
+  int32 id = 1;
+  int32 user_id = 2;
+  string status = 3;
+  double total_amount = 4;
+  string shipping_address = 5;
+  string created_at = 6;
+  string completed_at = 7; // Opcional
+  repeated OrderItemResponse items = 8;
+}
+
+message OrderItemResponse {
+  int32 id = 1;
+  int32 product_id = 2;
+  string product_name = 3;
+  int32 quantity = 4;
+  double unit_price = 5;
+  double subtotal = 6;
+}
+
+message ValidateOrderItemsResponse {
+  bool is_valid = 1;
+  string message = 2;
+  repeated ValidationError errors = 3;
+}
+
+message ValidationError {
+  int32 product_id = 1;
+  string error_message = 2;
+}

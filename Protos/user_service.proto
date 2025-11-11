@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+option csharp_namespace = "ECommerceGRPC.UserService";
+
+package userservice;
+
+// Servicio de gestión de usuarios
+service UserService {
+  // Obtener un usuario por ID (Unary)
+  rpc GetUser (GetUserRequest) returns (UserResponse);
+  
+  // Obtener lista de usuarios con paginación y filtros (Server Streaming)
+  rpc GetUsers (GetUsersRequest) returns (stream UserResponse);
+  
+  // Crear un nuevo usuario (Unary)
+  rpc CreateUser (CreateUserRequest) returns (UserResponse);
+  
+  // Actualizar un usuario existente (Unary)
+  rpc UpdateUser (UpdateUserRequest) returns (UserResponse);
+  
+  // Eliminar un usuario (eliminación lógica) (Unary)
+  rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+  
+  // Autenticar usuario y obtener información básica (Unary)
+  rpc AuthenticateUser (AuthenticateUserRequest) returns (AuthenticateUserResponse);
+  
+  // Validar si un email ya existe (Unary)
+  rpc ValidateEmail (ValidateEmailRequest) returns (ValidateEmailResponse);
+}
+
+// Mensajes de Request
+
+message GetUserRequest {
+  int32 id = 1;
+}
+
+message GetUsersRequest {
+  int32 page_number = 1;
+  int32 page_size = 2;
+  string role = 3; // Opcional: Customer, Premium, Admin
+  bool only_active = 4; // Default true
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string password = 4; // Se hasheará en el servidor
+  string role = 5; // Customer, Premium, Admin
+}
+
+message UpdateUserRequest {
+  int32 id = 1;
+  string first_name = 2; // Opcional
+  string last_name = 3; // Opcional
+  string role = 4; // Opcional
+  bool is_active = 5; // Opcional
+}
+
+message DeleteUserRequest {
+  int32 id = 1;
+}
+
+message AuthenticateUserRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message ValidateEmailRequest {
+  string email = 1;
+  int32 exclude_user_id = 2; // Para validar al actualizar
+}
+
+// Mensajes de Response
+
+message UserResponse {
+  int32 id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string role = 5;
+  string created_at = 6;
+  string last_login = 7; // Opcional
+  bool is_active = 8;
+}
+
+message DeleteUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AuthenticateUserResponse {
+  bool success = 1;
+  string message = 2;
+  UserResponse user = 3; // Opcional
+  string token = 4; // JWT Token (opcional, se puede generar en el gateway)
+}
+
+message ValidateEmailResponse {
+  bool is_available = 1;
+  string message = 2;
+}

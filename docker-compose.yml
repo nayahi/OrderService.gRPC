@@ -1,0 +1,100 @@
+﻿version: '3.8'
+
+services:
+  # rabbitmq:
+    # image: rabbitmq:3-management
+    # container_name: microservices-rabbitmq
+    # environment:
+      # - RABBITMQ_DEFAULT_USER=admin
+      # - RABBITMQ_DEFAULT_PASS=admin123
+    # ports:
+      # - "5672:5672"    # AMQP
+      # - "15672:15672"  # Management UI
+    # networks:
+      # - microservices-network
+    # healthcheck:
+      # test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      # interval: 10s
+      # timeout: 5s
+      # retries: 5
+  # SQL Server 2019
+  # sqlserver:
+    # image: mcr.microsoft.com/mssql/server:2019-latest
+    # container_name: microservices-sqlserver
+    # environment:
+      # - ACCEPT_EULA=Y
+      # - SA_PASSWORD=Password123!
+      # - MSSQL_PID=Developer
+    # ports:
+      # - "1434:1433"
+    # volumes:
+      # - sqlserver-data:/var/opt/mssql
+    # networks:
+      # - microservices-network
+    # restart: unless-stopped
+  # # ⚠️ HEALTHCHECK SIMPLIFICADO - SIN SQLCMD
+    # healthcheck:
+      # test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/1433' || exit 1"]
+      # #test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" || exit 1
+      # interval: 10s
+      # timeout: 5s
+      # retries: 5
+      # start_period: 30s
+
+  # Redis
+  # redis:
+    # image: redis:7-alpine
+    # container_name: microservices-redis
+    # ports:
+      # - "6379:6379"
+    # volumes:
+      # - redis-data:/data
+    # networks:
+      # - microservices-network
+    # restart: unless-stopped
+    
+  # ====================================
+  # MICROSERVICIOS
+  # ====================================
+
+  # OrderService gRPC
+  orderservice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce-grpc-orderservice
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # ⚠️ IMPORTANTE: Dentro de Docker, usa 'sqlserver' no 'localhost'
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=ECommerceOrders;User Id=sa;Password=Password123!;TrustServerCertificate=True;MultipleActiveResultSets=true
+      - ASPNETCORE_URLS=http://+:7003
+      # ⚠️ IMPORTANTE: Dentro de Docker, usa 'rabbitmq' no 'localhost'
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+    ports:
+      - "7003:7003"
+    # depends_on:
+      # sqlserver:
+        # condition: service_healthy
+      # rabbitmq:
+        # condition: service_healthy
+      #redis:
+       # condition: service_healthy
+    networks:
+      - infra_microservices-network
+    volumes:
+      - ./logs:/app/logs
+    restart: on-failure
+
+# volumes:
+  # sqlserver-data:
+    # driver: local
+  # rabbitmq-data:
+    # driver: local
+  # redis-data:
+    # driver: local
+
+networks:
+  infra_microservices-network:
+    external: true
