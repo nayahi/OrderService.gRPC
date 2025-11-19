@@ -43,14 +43,25 @@ try
         });
     });
 
-    // Agregar servicios gRPC
-    builder.Services.AddGrpc();
+    // Registrar servicios gRPC
+    builder.Services.AddGrpc(options =>
+    {
+        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+        options.MaxReceiveMessageSize = 4 * 1024 * 1024; // 4 MB
+        options.MaxSendMessageSize = 4 * 1024 * 1024;    // 4 MB
+    });
 
     // Health checks
     //builder.Services.AddHealthChecks()
     //    .AddDbContextCheck<OrderDbContext>()
     //    .AddRabbitMQ(rabbitConnectionString:
     //        $"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}/");
+
+    // Configurar reflexión de gRPC para herramientas de desarrollo
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.AddGrpcReflection();
+    }
 
     var app = builder.Build();
 
@@ -79,6 +90,12 @@ try
     //    dbContext.Database.Migrate();
     //    Log.Information("Migraciones aplicadas correctamente");
     //}
+
+    // Configurar pipeline HTTP
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapGrpcReflectionService();
+    }
 
     // Configurar pipeline HTTP
     app.MapGrpcService<OrderGrpcService>();
