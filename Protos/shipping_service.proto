@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+option csharp_namespace = "ECommerceGRPC.ShippingService";
+
+package shippingservice;
+
+// Servicio de gestión de envíos
+service ShippingService {
+  // Crear un nuevo envío
+  rpc CreateShipment (CreateShipmentRequest) returns (ShipmentResponse);
+  
+  // Obtener estado de un envío
+  rpc GetShipmentStatus (GetShipmentStatusRequest) returns (ShipmentResponse);
+  
+  // Rastrear un envío por número de tracking
+  rpc TrackShipment (TrackShipmentRequest) returns (ShipmentResponse);
+  
+  // Cancelar un envío
+  rpc CancelShipment (CancelShipmentRequest) returns (ShipmentResponse);
+  
+  // Obtener historial de envíos de una orden
+  rpc GetShipmentHistory (GetShipmentHistoryRequest) returns (ShipmentHistoryResponse);
+  
+  // Actualizar ubicación del envío (usado por el sistema de tracking)
+  rpc UpdateShipmentLocation (UpdateShipmentLocationRequest) returns (ShipmentResponse);
+}
+
+// Solicitud para crear envío
+message CreateShipmentRequest {
+  int32 order_id = 1;
+  int32 user_id = 2;
+  string shipping_address = 3;
+  string city = 4;
+  string state = 5;
+  string zip_code = 6;
+  string country = 7;
+  string phone_number = 8;
+  string shipping_method = 9; // Standard, Express, Overnight
+}
+
+// Solicitud para obtener estado de envío
+message GetShipmentStatusRequest {
+  int32 shipment_id = 1;
+}
+
+// Solicitud para tracking
+message TrackShipmentRequest {
+  string tracking_number = 1;
+}
+
+// Solicitud para cancelar envío
+message CancelShipmentRequest {
+  int32 shipment_id = 1;
+  string reason = 2;
+}
+
+// Solicitud para historial de envíos
+message GetShipmentHistoryRequest {
+  int32 order_id = 1;
+}
+
+// Solicitud para actualizar ubicación
+message UpdateShipmentLocationRequest {
+  int32 shipment_id = 1;
+  string current_location = 2;
+  string status = 3; // InTransit, OutForDelivery, Delivered
+}
+
+// Respuesta de envío
+message ShipmentResponse {
+  int32 shipment_id = 1;
+  int32 order_id = 2;
+  int32 user_id = 3;
+  string tracking_number = 4;
+  string shipping_address = 5;
+  string city = 6;
+  string state = 7;
+  string zip_code = 8;
+  string country = 9;
+  string phone_number = 10;
+  string shipping_method = 11;
+  string status = 12; // Pending, InTransit, OutForDelivery, Delivered, Cancelled
+  string current_location = 13;
+  string estimated_delivery = 14;
+  string actual_delivery = 15;
+  string created_at = 16;
+  string shipped_at = 17;
+  string carrier = 18;
+}
+
+// Respuesta de historial de envíos
+message ShipmentHistoryResponse {
+  repeated ShipmentResponse shipments = 1;
+  int32 total_count = 2;
+}

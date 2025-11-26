@@ -17,6 +17,9 @@ service OrderService {
   
   // Crear un nuevo pedido (Unary)
   rpc CreateOrder (CreateOrderRequest) returns (OrderResponse);
+
+  // Crear un nuevo pedido (Unary)
+  rpc CreateOrderWithSaga (CreateOrderRequest) returns (OrderResponse);
   
   // Actualizar estado de un pedido (Unary)
   rpc UpdateOrderStatus (UpdateOrderStatusRequest) returns (OrderResponse);
@@ -26,6 +29,9 @@ service OrderService {
   
   // Validar disponibilidad de productos antes de crear pedido (Unary)
   rpc ValidateOrderItems (ValidateOrderItemsRequest) returns (ValidateOrderItemsResponse);
+
+  //Obtiene el estado de la saga de una orden (Unary)
+  rpc GetSagaStatus (GetSagaStatusRequest) returns (GetSagaStatusResponse);
 }
 
 // Mensajes de Request
@@ -55,6 +61,7 @@ message CreateOrderRequest {
 message OrderItemRequest {
   int32 product_id = 1;
   int32 quantity = 2;
+  double unit_price = 3;
 }
 
 message UpdateOrderStatusRequest {
@@ -102,4 +109,28 @@ message ValidateOrderItemsResponse {
 message ValidationError {
   int32 product_id = 1;
   string error_message = 2;
+}
+
+//Validar el estado de un paso de saga
+message GetSagaStatusRequest {
+  int32 order_id = 1;
+}
+
+message GetSagaStatusResponse {
+  string saga_id = 1;
+  int32 order_id = 2;
+  string status = 3;
+  string started_at = 4;
+  string completed_at = 5;
+  string failure_reason = 6;
+  repeated SagaStepInfo steps = 7;
+}
+
+message SagaStepInfo {
+  string step_name = 1;
+  string status = 2;
+  int32 sequence = 3;
+  string started_at = 4;
+  string completed_at = 5;
+  string error_message = 6;
 }

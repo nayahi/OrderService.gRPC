@@ -1,8 +1,10 @@
 using System;
+using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using OrderService.gRPC.Data;
 using OrderService.gRPC.Services;
+using OrderService.gRPC.Validators;
 using Serilog;
 
 // Configurar Serilog
@@ -62,6 +64,10 @@ try
     {
         builder.Services.AddGrpcReflection();
     }
+
+    // Registrar validators
+    builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderRequestValidator>();
+    builder.Services.AddScoped<SagaOrchestrator>();
 
     var app = builder.Build();
 

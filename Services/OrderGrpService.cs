@@ -8,14 +8,19 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using OrderService.gRPC.Events;
 using OrderService.gRPC.Data;
+using OrderService.gRPC.Events;
+using OrderService.gRPC.Mappers;
 using OrderService.gRPC.Models;
+using FluentValidation;
+
 
 namespace OrderService.gRPC.Services
 {
     public class OrderGrpcService : ECommerceGRPC.OrderService.OrderService.OrderServiceBase
     {
+        private readonly IValidator<ECommerceGRPC.OrderService.CreateOrderRequest> _createValidator;
+        private readonly SagaOrchestrator _sagaOrchestrator;
         private readonly OrderDbContext _context;
         private readonly ILogger<OrderGrpcService> _logger;
         private readonly IPublishEndpoint _publishEndpoint;
@@ -25,12 +30,16 @@ namespace OrderService.gRPC.Services
             OrderDbContext context,
             ILogger<OrderGrpcService> logger,
             IPublishEndpoint publishEndpoint,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IValidator<ECommerceGRPC.OrderService.CreateOrderRequest> createValidator,
+            SagaOrchestrator sagaOrchestrator)
         {
             _context = context;
             _logger = logger;
             _publishEndpoint = publishEndpoint;
             _configuration = configuration;
+            _createValidator = createValidator;
+            _sagaOrchestrator = sagaOrchestrator;
         }
 
         public override async Task<OrderResponse> GetOrder(GetOrderRequest request, ServerCallContext context)
@@ -190,6 +199,150 @@ namespace OrderService.gRPC.Services
 
             return MapToOrderResponse(order);
         }
+
+        /// <summary>
+        /// Crea una orden con saga distribuida (nuevo método)
+        /// </summary>
+        public override async Task<OrderResponse> CreateOrderWithSaga(
+            CreateOrderRequest request,
+            ServerCallContext context)
+        {
+            _logger.LogInformation("📝 Creando orden con SAGA para User {UserId}", request.UserId);
+
+            // Validar request
+            var validationResult = await _createValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
+                _logger.LogWarning("Validación fallida para CreateOrderWithSaga: {Errors}", errors);
+                throw new RpcException(new Status(StatusCode.InvalidArgument, errors));
+            }
+
+            try
+            {
+                // Crear entidad de orden
+                var order = new Order
+                {
+                    UserId = request.UserId,
+                    ShippingAddress = request.ShippingAddress,
+                    Status = OrderStatus.Pending,
+                    TotalAmount = 0, // Se calculará con los items
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                // Agregar items
+                foreach (var item in request.Items)
+                {
+                    var orderItem = new OrderItem
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        UnitPrice = (decimal)item.UnitPrice  // ← USAR unit_price del request
+                    };
+                    order.Items.Add(orderItem);
+                    order.TotalAmount += orderItem.Quantity * orderItem.UnitPrice;
+                }
+
+                // Guardar orden inicial
+                await _context.Orders.AddAsync(order);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("✓ Orden {OrderId} creada - Iniciando SAGA", order.Id);
+
+                // EJECUTAR SAGA DISTRIBUIDA
+                var saga = await _sagaOrchestrator.ExecuteSagaAsync(order);
+
+                // Recargar orden actualizada
+                await _context.Entry(order).ReloadAsync();
+                await _context.Entry(order).Collection(o => o.Items).LoadAsync();
+
+                _logger.LogInformation(
+                    saga.Status == SagaStatus.Completed
+                        ? "✅ Orden {OrderId} procesada exitosamente con SAGA"
+                        : "❌ Orden {OrderId} falló en SAGA - Status: {Status}",
+                    order.Id, saga.Status);
+
+                // Mapear respuesta usando el mapper compatible
+                return OrderMapper.ToOrderResponse(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al crear orden con saga");
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"Error interno al crear orden: {ex.Message}"));
+            }
+        }
+
+        /// <summary>
+        /// Crea una orden con saga distribuida (con validador)
+        /// </summary>
+        //public override async Task<OrderResponse> CreateOrderWithSaga(
+        //    CreateOrderRequest request,
+        //    ServerCallContext context)
+        //{
+        //    _logger.LogInformation("📝 Creando orden con SAGA para User {UserId}", request.UserId);
+
+        //    // Validar request
+        //    var validationResult = await _createValidator.ValidateAsync(request);
+        //    if (!validationResult.IsValid)
+        //    {
+        //        var errors = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
+        //        _logger.LogWarning("Validación fallida para CreateOrder: {Errors}", errors);
+        //        throw new RpcException(new Status(StatusCode.InvalidArgument, errors));
+        //    }
+
+        //    try
+        //    {
+        //        // Crear entidad de orden
+        //        var order = new Order
+        //        {
+        //            UserId = request.UserId,
+        //            Status = OrderStatus.Pending,
+        //            TotalAmount = 0, // Se calculará con los items
+        //            CreatedAt = DateTime.UtcNow
+        //        };
+
+        //        // Agregar items
+        //        foreach (var item in request.Items)
+        //        {
+        //            var orderItem = new OrderItem
+        //            {
+        //                ProductId = item.ProductId,
+        //                Quantity = item.Quantity,
+        //                UnitPrice = (decimal)item.UnitPrice
+        //            };
+        //            order.Items.Add(orderItem);
+        //            order.TotalAmount += orderItem.Quantity * orderItem.UnitPrice;
+        //        }
+
+        //        // Guardar orden inicial
+        //        await _context.Orders.AddAsync(order);
+        //        await _context.SaveChangesAsync();
+
+        //        _logger.LogInformation("✓ Orden {OrderId} creada - Iniciando SAGA", order.Id);
+
+        //        // EJECUTAR SAGA DISTRIBUIDA
+        //        var saga = await _sagaOrchestrator.ExecuteSagaAsync(order);
+
+        //        // Recargar orden actualizada
+        //        await _context.Entry(order).ReloadAsync();
+
+        //        _logger.LogInformation(
+        //            saga.Status == SagaStatus.Completed
+        //                ? "✅ Orden {OrderId} procesada exitosamente con SAGA"
+        //                : "❌ Orden {OrderId} falló en SAGA - Status: {Status}",
+        //            order.Id, saga.Status);
+
+        //        // Mapear respuesta
+        //        return OrderMapper.ToOrderResponse(order);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error al crear orden con saga");
+        //        throw new RpcException(new Status(StatusCode.Internal,
+        //            $"Error interno al crear orden: {ex.Message}"));
+        //    }
+        //}
 
         public override async Task<OrderResponse> UpdateOrderStatus(
             UpdateOrderStatusRequest request, ServerCallContext context)
@@ -488,5 +641,72 @@ namespace OrderService.gRPC.Services
 
             return response;
         }
+
+        /// <summary>
+        /// Obtiene el estado de la saga de una orden
+        /// </summary>
+        public override async Task<GetSagaStatusResponse> GetSagaStatus(
+            GetSagaStatusRequest request,
+            ServerCallContext context)
+        {
+            _logger.LogInformation("Consultando estado de saga para Order {OrderId}", request.OrderId);
+
+            try
+            {
+                var saga = await _context.SagaStates
+                    .Include(s => s.Steps.OrderBy(step => step.Sequence))
+                    .FirstOrDefaultAsync(s => s.OrderId == request.OrderId);
+
+                if (saga == null)
+                {
+                    throw new RpcException(new Status(StatusCode.NotFound,
+                        $"Saga not found for Order {request.OrderId}"));
+                }
+
+                var response = new GetSagaStatusResponse
+                {
+                    SagaId = saga.SagaId,
+                    OrderId = saga.OrderId,
+                    Status = saga.Status,
+                    StartedAt = saga.StartedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    FailureReason = saga.FailureReason ?? ""
+                };
+
+                if (saga.CompletedAt.HasValue)
+                    response.CompletedAt = saga.CompletedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+
+                // Agregar pasos
+                foreach (var step in saga.Steps)
+                {
+                    var stepInfo = new SagaStepInfo
+                    {
+                        StepName = step.StepName,
+                        Status = step.Status,
+                        Sequence = step.Sequence,
+                        StartedAt = step.StartedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                        ErrorMessage = step.ErrorMessage ?? ""
+                    };
+
+                    if (step.CompletedAt.HasValue)
+                        stepInfo.CompletedAt = step.CompletedAt.Value.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+
+                    response.Steps.Add(stepInfo);
+                }
+
+                return response;
+            }
+            catch (RpcException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener estado de saga");
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"Error interno: {ex.Message}"));
+            }
+        }
     }
+
+
 }

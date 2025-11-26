@@ -26,7 +26,7 @@ RUN mkdir -p /app/logs
 COPY --from=build /app/publish .
 
 # Exponer puerto gRPC
-EXPOSE 7001
+EXPOSE 7003
 
 # Variables de entorno
 ENV ASPNETCORE_URLS=http://+:7003

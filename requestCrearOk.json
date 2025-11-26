@@ -1,0 +1,7 @@
+{
+  "user_id": 2,
+  "shipping_address": "Heredia, Costa Rica",
+  "items": [
+    {"product_id": 1, "quantity": 1, "unit_price": 1299.99}
+  ]
+}

@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+option csharp_namespace = "ECommerceGRPC.PaymentService";
+
+package paymentservice;
+
+// Servicio de procesamiento de pagos
+service PaymentService {
+  // Procesar un pago para una orden
+  rpc ProcessPayment (ProcessPaymentRequest) returns (PaymentResponse);
+  
+  // Reembolsar un pago
+  rpc RefundPayment (RefundPaymentRequest) returns (PaymentResponse);
+  
+  // Obtener estado de un pago
+  rpc GetPaymentStatus (GetPaymentStatusRequest) returns (PaymentResponse);
+  
+  // Obtener historial de pagos de una orden
+  rpc GetPaymentHistory (GetPaymentHistoryRequest) returns (PaymentHistoryResponse);
+  
+  // Obtener un pago por ID
+  rpc GetPayment (GetPaymentRequest) returns (PaymentResponse);
+}
+
+// Solicitud para procesar un pago
+message ProcessPaymentRequest {
+  int32 order_id = 1;
+  int32 user_id = 2;
+  double amount = 3;
+  string payment_method = 4; // CreditCard, DebitCard, PayPal, BankTransfer
+  string currency = 5;
+  string card_last_four_digits = 6; // Opcional
+}
+
+// Solicitud para reembolsar un pago
+message RefundPaymentRequest {
+  int32 payment_id = 1;
+  string reason = 2;
+  double amount = 3; // Si es menor al total, es reembolso parcial
+}
+
+// Solicitud para obtener estado de pago
+message GetPaymentStatusRequest {
+  int32 payment_id = 1;
+}
+
+// Solicitud para obtener historial de pagos
+message GetPaymentHistoryRequest {
+  int32 order_id = 1;
+}
+
+// Solicitud para obtener un pago
+message GetPaymentRequest {
+  int32 payment_id = 1;
+}
+
+// Respuesta de pago
+message PaymentResponse {
+  int32 payment_id = 1;
+  int32 order_id = 2;
+  int32 user_id = 3;
+  double amount = 4;
+  string currency = 5;
+  string payment_method = 6;
+  string status = 7; // Pending, Completed, Failed, Refunded
+  string transaction_id = 8; // ID de transacción externa (simulado)
+  string failure_reason = 9; // Si el pago falló
+  string card_last_four_digits = 10;
+  string created_at = 11;
+  string completed_at = 12;
+}
+
+// Respuesta de historial de pagos
+message PaymentHistoryResponse {
+  repeated PaymentResponse payments = 1;
+  int32 total_count = 2;
+}
