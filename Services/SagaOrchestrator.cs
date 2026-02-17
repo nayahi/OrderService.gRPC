@@ -283,6 +283,7 @@ namespace OrderService.gRPC.Services
                 if (_notificationFacade is not null)
                 {
                     var result = await _notificationFacade.SendNotificationAsync(
+                        notificationChannel: _notificationChannel,  // ← Canal existente que ya funciona
                         userId: order.UserId,
                         orderId: order.Id,
                         emailTo: "customer@email.com",

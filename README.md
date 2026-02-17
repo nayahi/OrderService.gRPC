@@ -1,4 +1,11 @@
-﻿# Esperar 10 segundos después de reiniciar
+﻿Para la semana 5 de micro3 ejecutar:
+.\Test-Migration-grpcCurl.ps1                      # Todos los tests
+.\Test-Migration-grpcCurl -Test 1              # Solo Flag OFF
+.\Test-Migration-grpcCurl -Test 2 -OrderCount 20   # Canary con 20 órdenes
+.\Test-Migration-grpcCurl -Test 3,4            # Solo migración completa + rollback
+.\Test-Migration-grpcCurl -Test 2,3 -OrderCount 15  # Canary y full con 15 órdenes
+-----------------------------------
+# Esperar 10 segundos después de reiniciar
 
 # Probar saga
 grpcurl -plaintext -d '{

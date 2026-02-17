@@ -84,18 +84,17 @@ try
     {
         var config = new AmazonSecretsManagerConfig
         {
-            ServiceURL = builder.Configuration["AWS:ServiceURL"] ?? "http://localhost:4566",
+            ServiceURL = "http://localstack:4566",
             AuthenticationRegion = "us-east-1"
         };
         return new AmazonSecretsManagerClient("test", "test", config);
     });
 
-    // AWS SQS (LocalStack) — para enviar mensajes a EmailBatch.Lambda
     builder.Services.AddSingleton<IAmazonSQS>(sp =>
     {
         var config = new AmazonSQSConfig
         {
-            ServiceURL = builder.Configuration["AWS:ServiceURL"] ?? "http://localhost:4566",
+            ServiceURL = "http://localstack:4566",
             AuthenticationRegion = "us-east-1"
         };
         return new AmazonSQSClient("test", "test", config);

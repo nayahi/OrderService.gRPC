@@ -127,12 +127,12 @@ namespace OrderService.gRPC.Services
                 await responseStream.WriteAsync(MapToOrderResponse(order));
             }
 
-            _logger.LogInformation("GetOrdersByUser completed - Sent {Count} orders", orders.Count);
+            _logger.LogInformation("GetOrdersByUser completada - Enviadas {Count} ordenes", orders.Count);
         }
 
         public override async Task<OrderResponse> CreateOrder(CreateOrderRequest request, ServerCallContext context)
         {
-            _logger.LogInformation("CreateOrder called for UserID: {UserId}", request.UserId);
+            _logger.LogInformation("CreateOrder invocado para UserID: {UserId}", request.UserId);
 
             // Validaciones básicas
             if (request.UserId <= 0)
@@ -176,7 +176,7 @@ namespace OrderService.gRPC.Services
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Order created successfully - ID: {OrderId}, Total: {Total}",
+            _logger.LogInformation("Order creada ok - ID: {OrderId}, Total: {Total}",
                 order.Id, order.TotalAmount);
 
             // PUBLICAR EVENTO A RABBITMQ: OrderCreated
@@ -195,7 +195,7 @@ namespace OrderService.gRPC.Services
                 }).ToList()
             });
 
-            _logger.LogInformation("OrderCreatedEvent published for OrderID: {OrderId}", order.Id);
+            _logger.LogInformation("OrderCreatedEvent publicado para OrderID: {OrderId}", order.Id);
 
             return MapToOrderResponse(order);
         }
@@ -273,81 +273,10 @@ namespace OrderService.gRPC.Services
             }
         }
 
-        /// <summary>
-        /// Crea una orden con saga distribuida (con validador)
-        /// </summary>
-        //public override async Task<OrderResponse> CreateOrderWithSaga(
-        //    CreateOrderRequest request,
-        //    ServerCallContext context)
-        //{
-        //    _logger.LogInformation("📝 Creando orden con SAGA para User {UserId}", request.UserId);
-
-        //    // Validar request
-        //    var validationResult = await _createValidator.ValidateAsync(request);
-        //    if (!validationResult.IsValid)
-        //    {
-        //        var errors = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
-        //        _logger.LogWarning("Validación fallida para CreateOrder: {Errors}", errors);
-        //        throw new RpcException(new Status(StatusCode.InvalidArgument, errors));
-        //    }
-
-        //    try
-        //    {
-        //        // Crear entidad de orden
-        //        var order = new Order
-        //        {
-        //            UserId = request.UserId,
-        //            Status = OrderStatus.Pending,
-        //            TotalAmount = 0, // Se calculará con los items
-        //            CreatedAt = DateTime.UtcNow
-        //        };
-
-        //        // Agregar items
-        //        foreach (var item in request.Items)
-        //        {
-        //            var orderItem = new OrderItem
-        //            {
-        //                ProductId = item.ProductId,
-        //                Quantity = item.Quantity,
-        //                UnitPrice = (decimal)item.UnitPrice
-        //            };
-        //            order.Items.Add(orderItem);
-        //            order.TotalAmount += orderItem.Quantity * orderItem.UnitPrice;
-        //        }
-
-        //        // Guardar orden inicial
-        //        await _context.Orders.AddAsync(order);
-        //        await _context.SaveChangesAsync();
-
-        //        _logger.LogInformation("✓ Orden {OrderId} creada - Iniciando SAGA", order.Id);
-
-        //        // EJECUTAR SAGA DISTRIBUIDA
-        //        var saga = await _sagaOrchestrator.ExecuteSagaAsync(order);
-
-        //        // Recargar orden actualizada
-        //        await _context.Entry(order).ReloadAsync();
-
-        //        _logger.LogInformation(
-        //            saga.Status == SagaStatus.Completed
-        //                ? "✅ Orden {OrderId} procesada exitosamente con SAGA"
-        //                : "❌ Orden {OrderId} falló en SAGA - Status: {Status}",
-        //            order.Id, saga.Status);
-
-        //        // Mapear respuesta
-        //        return OrderMapper.ToOrderResponse(order);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error al crear orden con saga");
-        //        throw new RpcException(new Status(StatusCode.Internal,
-        //            $"Error interno al crear orden: {ex.Message}"));
-        //    }
-        //}
-
         public override async Task<OrderResponse> UpdateOrderStatus(
             UpdateOrderStatusRequest request, ServerCallContext context)
         {
-            _logger.LogInformation("UpdateOrderStatus called for ID: {OrderId}, NewStatus: {Status}",
+            _logger.LogInformation("UpdateOrderStatus invocado para ID: {OrderId}, Nuevo estado: {Status}",
                 request.Id, request.Status);
 
             if (request.Id <= 0)
@@ -391,7 +320,7 @@ namespace OrderService.gRPC.Services
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Order status updated - ID: {OrderId}, OldStatus: {OldStatus}, NewStatus: {NewStatus}",
+            _logger.LogInformation("Estado de la orden actualizado- ID: {OrderId}, Estado anterior: {OldStatus}, Nuevo estado: {NewStatus}",
                 order.Id, oldStatus, request.Status);
 
             // PUBLICAR EVENTO: OrderStatusChanged
@@ -408,7 +337,7 @@ namespace OrderService.gRPC.Services
 
         public override async Task<OrderResponse> CancelOrder(CancelOrderRequest request, ServerCallContext context)
         {
-            _logger.LogInformation("CancelOrder called for ID: {OrderId}", request.Id);
+            _logger.LogInformation("CancelOrder invocado para ID: {OrderId}", request.Id);
 
             if (request.Id <= 0)
             {
@@ -441,7 +370,7 @@ namespace OrderService.gRPC.Services
             order.Status = "Cancelled";
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Order cancelled successfully - ID: {OrderId}", order.Id);
+            _logger.LogInformation("Order cancelada ok - ID: {OrderId}", order.Id);
 
             // PUBLICAR EVENTO: OrderCancelled
             await _publishEndpoint.Publish(new OrderCancelledEvent
@@ -458,7 +387,7 @@ namespace OrderService.gRPC.Services
         public override async Task<ValidateOrderItemsResponse> ValidateOrderItems(
             ValidateOrderItemsRequest request, ServerCallContext context)
         {
-            _logger.LogInformation("ValidateOrderItems called with {Count} items", request.Items.Count);
+            _logger.LogInformation("ValidateOrderItems invocada con {Count} items", request.Items.Count);
 
             var errors = new List<ValidationError>();
             var isValid = true;
@@ -506,7 +435,7 @@ namespace OrderService.gRPC.Services
                         "El usuario está inactivo"));
                 }
 
-                _logger.LogInformation("User validated successfully - UserID: {UserId}", userId);
+                _logger.LogInformation("Usuario validado ok - UserID: {UserId}", userId);
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
             {
