@@ -52,6 +52,11 @@
 		<PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
 		<PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+
+		<!-- SEMANA 5: Feature Flags + Strangler Fig Pattern -->
+		<PackageReference Include="AWSSDK.SecretsManager" Version="3.7.400" />
+		<PackageReference Include="AWSSDK.SQS" Version="3.7.400" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
 	</ItemGroup>
 
 </Project>

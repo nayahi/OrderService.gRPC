@@ -17,6 +17,7 @@ namespace OrderService.gRPC.Services
     /// </summary>
     public class SagaOrchestrator
     {
+        private readonly NotificationFacade? _notificationFacade; //Sem5
         private readonly OrderDbContext _context;
         private readonly ILogger<SagaOrchestrator> _logger;
         private readonly IConfiguration _configuration;
@@ -30,11 +31,13 @@ namespace OrderService.gRPC.Services
         public SagaOrchestrator(
             OrderDbContext context,
             ILogger<SagaOrchestrator> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            NotificationFacade? notificationFacade = null)
         {
             _context = context;
             _logger = logger;
             _configuration = configuration;
+            _notificationFacade = notificationFacade; //Sem5
 
             // Inicializar canales gRPC (en producción usar factory con DI)
             _productChannel = GrpcChannel.ForAddress("http://productservice:7001");
@@ -262,6 +265,12 @@ namespace OrderService.gRPC.Services
         /// <summary>
         /// PASO 4: Enviar notificación (no crítico)
         /// </summary>
+        /// 
+        /// <summary>
+        /// PASO 4: Enviar notificación (no crítico)
+        /// SEMANA 5: Usa NotificationFacade para enrutar vía feature flag
+        /// Si el Facade no está disponible, usa gRPC directo (backward compatible)
+        /// </summary>
         private async Task SendNotificationAsync(SagaState saga, Order order)
         {
             var step = await CreateStepAsync(saga, SagaStepName.SendNotification, 4);
@@ -270,25 +279,59 @@ namespace OrderService.gRPC.Services
             {
                 _logger.LogInformation("📧 PASO 4: Enviando notificación");
 
-                var client = new NotificationService.NotificationServiceClient(_notificationChannel);
-
-                var request = new SendEmailRequest
+                // SEMANA 5: Usar Facade si está disponible (feature flag routing)
+                if (_notificationFacade is not null)
                 {
-                    UserId = order.UserId,
-                    OrderId = order.Id,
-                    EmailTo = "customer@email.com", // En producción, obtener del UserService
-                    Subject = $"Order #{order.Id} Confirmed",
-                    Body = $"Your order for ${order.TotalAmount} has been confirmed and will be shipped soon.",
-                    Template = "OrderConfirmation"
-                };
+                    var result = await _notificationFacade.SendNotificationAsync(
+                        userId: order.UserId,
+                        orderId: order.Id,
+                        emailTo: "customer@email.com",
+                        subject: $"Order #{order.Id} Confirmed",
+                        body: $"Your order for ${order.TotalAmount} has been confirmed and will be shipped soon.",
+                        template: "OrderConfirmation");
 
-                var response = await client.SendEmailAsync(request);
+                    saga.NotificationId = result.NotificationId;
+                    await _context.SaveChangesAsync();
 
-                saga.NotificationId = response.NotificationId.ToString();
-                await _context.SaveChangesAsync();
+                    if (result.Success)
+                    {
+                        await CompleteStepAsync(step, StepStatus.Completed, result.NotificationId,
+                            $"Notification sent via {result.Route} ({result.LatencyMs}ms)");
+                        _logger.LogInformation(
+                            "✓ Notificación enviada via {Route} en {Latency}ms",
+                            result.Route, result.LatencyMs);
+                    }
+                    else
+                    {
+                        await CompleteStepAsync(step, StepStatus.Failed, null,
+                            $"Notification failed via {result.Route}: {result.Error}");
+                        _logger.LogWarning("⚠️ Notificación falló via {Route}: {Error}",
+                            result.Route, result.Error);
+                    }
+                }
+                else
+                {
+                    // Fallback: comportamiento original sin Facade (backward compatible)
+                    var client = new NotificationService.NotificationServiceClient(_notificationChannel);
 
-                await CompleteStepAsync(step, StepStatus.Completed, saga.NotificationId, "Notification sent");
-                _logger.LogInformation("✓ Notificación enviada");
+                    var request = new SendEmailRequest
+                    {
+                        UserId = order.UserId,
+                        OrderId = order.Id,
+                        EmailTo = "customer@email.com",
+                        Subject = $"Order #{order.Id} Confirmed",
+                        Body = $"Your order for ${order.TotalAmount} has been confirmed and will be shipped soon.",
+                        Template = "OrderConfirmation"
+                    };
+
+                    var response = await client.SendEmailAsync(request);
+
+                    saga.NotificationId = response.NotificationId.ToString();
+                    await _context.SaveChangesAsync();
+
+                    await CompleteStepAsync(step, StepStatus.Completed, saga.NotificationId, "Notification sent via gRPC (legacy)");
+                    _logger.LogInformation("✓ Notificación enviada (gRPC directo)");
+                }
             }
             catch (Exception ex)
             {
@@ -297,6 +340,41 @@ namespace OrderService.gRPC.Services
                 // No retornamos false porque la notificación no es crítica
             }
         }
+        //private async Task SendNotificationAsync(SagaState saga, Order order)
+        //{
+        //    var step = await CreateStepAsync(saga, SagaStepName.SendNotification, 4);
+
+        //    try
+        //    {
+        //        _logger.LogInformation("📧 PASO 4: Enviando notificación");
+
+        //        var client = new NotificationService.NotificationServiceClient(_notificationChannel);
+
+        //        var request = new SendEmailRequest
+        //        {
+        //            UserId = order.UserId,
+        //            OrderId = order.Id,
+        //            EmailTo = "customer@email.com", // En producción, obtener del UserService
+        //            Subject = $"Order #{order.Id} Confirmed",
+        //            Body = $"Your order for ${order.TotalAmount} has been confirmed and will be shipped soon.",
+        //            Template = "OrderConfirmation"
+        //        };
+
+        //        var response = await client.SendEmailAsync(request);
+
+        //        saga.NotificationId = response.NotificationId.ToString();
+        //        await _context.SaveChangesAsync();
+
+        //        await CompleteStepAsync(step, StepStatus.Completed, saga.NotificationId, "Notification sent");
+        //        _logger.LogInformation("✓ Notificación enviada");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogWarning(ex, "⚠️ Error al enviar notificación (no crítico)");
+        //        await CompleteStepAsync(step, StepStatus.Failed, null, ex.Message);
+        //        // No retornamos false porque la notificación no es crítica
+        //    }
+        //}
 
         /// <summary>
         /// PASO 5: Crear envío

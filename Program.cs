@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +6,9 @@ using OrderService.gRPC.Data;
 using OrderService.gRPC.Services;
 using OrderService.gRPC.Validators;
 using Serilog;
+using Amazon;
+using Amazon.SecretsManager;
+using Amazon.SQS;
 
 // Configurar Serilog
 Log.Logger = new LoggerConfiguration()
@@ -30,7 +33,7 @@ try
     {
         x.UsingRabbitMq((context, cfg) =>
         {
-            // Leer configuraci�n de RabbitMQ
+            // Leer configuración de RabbitMQ
             var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
             var rabbitUser = builder.Configuration["RabbitMQ:Username"] ?? "admin";
             var rabbitPass = builder.Configuration["RabbitMQ:Password"] ?? "admin123";
@@ -59,7 +62,7 @@ try
     //    .AddRabbitMQ(rabbitConnectionString:
     //        $"amqp://{builder.Configuration["RabbitMQ:Username"]}:{builder.Configuration["RabbitMQ:Password"]}@{builder.Configuration["RabbitMQ:Host"]}/");
 
-    // Configurar reflexi�n de gRPC para herramientas de desarrollo
+    // Configurar reflexión de gRPC para herramientas de desarrollo
     if (builder.Environment.IsDevelopment())
     {
         builder.Services.AddGrpcReflection();
@@ -68,6 +71,45 @@ try
     // Registrar validators
     builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderRequestValidator>();
     builder.Services.AddScoped<SagaOrchestrator>();
+
+    // ══════════════════════════════════════════════════════════════════
+    // SEMANA 5: Feature Flags + NotificationFacade para Strangler Fig
+    // ══════════════════════════════════════════════════════════════════
+
+    // MemoryCache para feature flags (TTL 30 segundos)
+    builder.Services.AddMemoryCache();
+
+    // AWS Secrets Manager (LocalStack)
+    builder.Services.AddSingleton<IAmazonSecretsManager>(sp =>
+    {
+        var config = new AmazonSecretsManagerConfig
+        {
+            ServiceURL = builder.Configuration["AWS:ServiceURL"] ?? "http://localhost:4566",
+            AuthenticationRegion = "us-east-1"
+        };
+        return new AmazonSecretsManagerClient("test", "test", config);
+    });
+
+    // AWS SQS (LocalStack) — para enviar mensajes a EmailBatch.Lambda
+    builder.Services.AddSingleton<IAmazonSQS>(sp =>
+    {
+        var config = new AmazonSQSConfig
+        {
+            ServiceURL = builder.Configuration["AWS:ServiceURL"] ?? "http://localhost:4566",
+            AuthenticationRegion = "us-east-1"
+        };
+        return new AmazonSQSClient("test", "test", config);
+    });
+
+    // Feature Flag Service
+    builder.Services.AddSingleton<IFeatureFlagService, FeatureFlagService>();
+
+    // Notification Facade (Strangler Fig)
+    builder.Services.AddScoped<NotificationFacade>();
+
+    // ══════════════════════════════════════════════════════════════════
+    // FIN SEMANA 5
+    // ══════════════════════════════════════════════════════════════════
 
     var app = builder.Build();
 
@@ -88,7 +130,7 @@ try
         }
     }
 
-    // Aplicar migraciones autom�ticamente en desarrollo
+    // Aplicar migraciones automáticamente en desarrollo
     //if (app.Environment.IsDevelopment())
     //{
     //    using var scope = app.Services.CreateScope();
@@ -110,13 +152,13 @@ try
 
     app.MapGet("/", () => "OrderService gRPC running with MassTransit. Use a gRPC client to connect on port 7003");
 
-    Log.Information("OrderService.gRPC iniciado en puerto 7003 con integraci�n a RabbitMQ");
+    Log.Information("OrderService.gRPC iniciado en puerto 7003 con integración a RabbitMQ");
 
     app.Run();
 }
 catch (Exception ex)
 {
-    Log.Fatal(ex, "La aplicaci�n fall� al iniciar");
+    Log.Fatal(ex, "La aplicación falló al iniciar");
 }
 finally
 {
